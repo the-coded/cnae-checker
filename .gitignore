@@ -7,6 +7,9 @@ web/index.html
 # Local state
 data/.hashes.json
 
+# Dev
+@todo/
+
 # OS
 .DS_Store
 Thumbs.db
