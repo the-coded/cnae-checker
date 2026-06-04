@@ -5,7 +5,7 @@ on:
   push:
     branches: [main]
     paths:
-      - 'output/**'
+      - 'data/**'
       - 'scripts/build-web.js'
       - 'scripts/extract.js'
       - 'scripts/extract-subclasses.js'
@@ -27,8 +27,17 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Run full pipeline
-        run: npm start
+      - name: Extract classes (CNAE 2.0)
+        run: npm run extract
+
+      - name: Extract subclasses (CNAE 2.3)
+        run: npm run extract:subclasses
+
+      - name: Validate extraction
+        run: npm run check
+
+      - name: Build web viewer
+        run: npm run web
 
       - name: Deploy to gh-pages (orphan branch)
         run: |

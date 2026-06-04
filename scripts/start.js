@@ -26,9 +26,9 @@ function run(script, label, index) {
         });
         return true;
     } catch (err) {
-        // scrape exits 1 when new URLs found — that's a warning, not a failure
+        // scrape exits 1 for new URLs OR network errors — both are non-blocking
         if (script === 'scrape-urls.js') {
-            console.log('\n⚠️  New URLs detected (non-blocking). Continuing...');
+            console.log('\n⚠️  Scrape step non-blocking (network error or new URLs). Continuing...');
             return true;
         }
         console.error(`\n❌ ${step} failed!`);
