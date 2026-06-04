@@ -1,0 +1,25 @@
+{
+  "name": "cnae-checker",
+  "version": "2.0.0",
+  "description": "Extractor and validator for CNAE (Classificação Nacional de Atividades Econômicas) data from IBGE/CONCLA",
+  "author": "Gabriel Mule",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/the-coded/cnae-checker.git"
+  },
+  "homepage": "https://the-coded.github.io/cnae-checker/",
+  "keywords": ["cnae", "ibge", "brazil", "classification", "economic-activities", "data"],
+  "scripts": {
+    "start": "node scripts/start.js",
+    "download": "node scripts/download.js",
+    "extract": "node scripts/extract.js",
+    "extract:subclasses": "node scripts/extract-subclasses.js",
+    "check": "node scripts/check.js",
+    "scrape": "node scripts/scrape-urls.js",
+    "web": "node scripts/build-web.js"
+  },
+  "dependencies": {
+    "xlsx": "^0.18.5"
+  }
+}

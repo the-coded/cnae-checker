@@ -1,0 +1,63 @@
+name: Deploy Viewer to GitHub Pages
+
+on:
+  workflow_dispatch: {}
+  push:
+    branches: [main]
+    paths:
+      - 'output/**'
+      - 'scripts/build-web.js'
+      - 'scripts/extract.js'
+      - 'scripts/extract-subclasses.js'
+
+permissions:
+  contents: write
+
+jobs:
+  deploy:
+    name: Build and deploy CNAE Viewer
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run full pipeline
+        run: npm start
+
+      - name: Deploy to gh-pages (orphan branch)
+        run: |
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+
+          # Save the generated viewer
+          cp web/index.html /tmp/cnae-viewer.html
+
+          # Create/reset orphan branch
+          git checkout --orphan gh-pages-deploy
+          git rm -rf . --quiet
+
+          # Place viewer at root
+          cp /tmp/cnae-viewer.html index.html
+
+          # Add CNAME if needed
+          # echo "your-domain.com" > CNAME
+
+          git add index.html
+          git commit -m "Deploy CNAE Viewer — $(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+
+          git push origin HEAD:gh-pages --force
+
+      - name: Summary
+        run: |
+          REPO="${{ github.repository }}"
+          echo "## ✅ Deployed to GitHub Pages" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "🌐 **URL:** https://${REPO%%/*}.github.io/${REPO##*/}/" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "> Enable GitHub Pages in repo Settings → Pages → Branch: **gh-pages** → Folder: **/ (root)**" >> $GITHUB_STEP_SUMMARY

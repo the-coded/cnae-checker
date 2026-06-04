@@ -1,0 +1,75 @@
+name: CNAE Monitor
+
+on:
+  # schedule:
+  #   - cron: '0 3 1 * *'  # Monthly — 1st day at 3am UTC
+  workflow_dispatch: {}
+
+jobs:
+  monitor:
+    name: Check for new CNAE data
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Scrape IBGE for new URLs
+        id: scrape
+        run: |
+          set +e
+          npm run scrape 2>&1 | tee /tmp/scrape-output.txt
+          EXIT_CODE=${PIPESTATUS[0]}
+          set -e
+
+          if [ "$EXIT_CODE" -eq 1 ]; then
+            echo "new_urls=true" >> $GITHUB_OUTPUT
+            echo "::warning::New URLs detected on IBGE download page!"
+          else
+            echo "new_urls=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Download files from IBGE
+        id: download
+        run: |
+          npm run download 2>&1 | tee /tmp/download-output.txt
+
+          if grep -q "File changed" /tmp/download-output.txt || grep -q "Downloaded" /tmp/download-output.txt; then
+            echo "files_changed=true" >> $GITHUB_OUTPUT
+          else
+            echo "files_changed=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Extract and validate
+        run: |
+          npm run extract
+          npm run extract:subclasses
+          npm run check
+
+      - name: Summary
+        run: |
+          echo "## CNAE Monitor Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ steps.scrape.outputs.new_urls }}" == "true" ]; then
+            echo "⚠️ **New URLs detected** on IBGE download page — review `scripts/scrape-urls.js`" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "✅ No new URLs found on IBGE page" >> $GITHUB_STEP_SUMMARY
+          fi
+          if [ "${{ steps.download.outputs.files_changed }}" == "true" ]; then
+            echo "📦 **Source files changed** — new data extracted and validated" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "✅ Source files unchanged (hashes match)" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      # Optional: send webhook alert on changes
+      # - name: Notify webhook
+      #   if: steps.scrape.outputs.new_urls == 'true' || steps.download.outputs.files_changed == 'true'
+      #   run: |
+      #     curl -X POST "${{ secrets.WEBHOOK_URL }}" \
+      #       -H "Content-Type: application/json" \
+      #       -d '{"text": "CNAE Monitor: changes detected!"}'
