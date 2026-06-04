@@ -366,7 +366,7 @@ ${embeddingsRaw ? `
     <input id="sem-input" class="sem-input" type="text" placeholder="Descreva a atividade econômica... ex: aulas de informática" />
     <button id="sem-search-btn" class="sem-btn" onclick="runSemanticSearch()">Buscar</button>
   </div>
-  <div class="sem-hint">Busca por similaridade semântica — requer internet para carregar o modelo (~65MB, cacheado)</div>
+  <div class="sem-hint">Busca híbrida: semântica + match no título (boost-only) — requer internet para carregar o modelo (~65MB, cacheado)</div>
   <div id="semantic-results"></div>
 </div>
 ` : ''}
@@ -746,17 +746,42 @@ async function loadSemModel() {
   return _semModel;
 }
 
+// Normalize for fuzzy matching (remove accents, lowercase)
+function normalizeText(str) {
+  return (str || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+}
+
+// Returns 0–1 title match quality. 0 if no overlap at all.
+function fuzzyTitleScore(queryNorm, titulo) {
+  if (!titulo) return 0;
+  const t = normalizeText(titulo);
+  if (queryNorm === t) return 1.0;        // exact
+  if (t.includes(queryNorm)) return 0.9;  // title contains full query
+  if (queryNorm.includes(t)) return 0.7;  // query contains full title
+  // Word-level: fraction of query words found in title
+  const qWords = queryNorm.split(/\\s+/).filter(w => w.length > 2);
+  if (qWords.length === 0) return 0;
+  const tWords = t.split(/\\s+/);
+  const matched = qWords.filter(qw => tWords.some(tw => tw.includes(qw) || qw.includes(tw))).length;
+  return (matched / qWords.length) * 0.75;
+}
+
 // DECOUPLED CONTRACT — same interface as a future API endpoint
+// Max-boost hybrid: fuzzy can only improve the score, never penalize.
 async function searchSimilar(query, topK = 10) {
   const extractor = await loadSemModel();
   const out = await extractor(query, { pooling: 'mean', normalize: true });
   const queryVec = Array.from(out.data);
+  const queryNorm = normalizeText(query);
 
-  const scores = EMBEDDINGS_DATA.items.map(item => ({
-    id: item.id,
-    type: item.type,
-    score: cosineSimilarity(queryVec, item.vector)
-  }));
+  const scores = EMBEDDINGS_DATA.items.map(item => {
+    const cosine = cosineSimilarity(queryVec, item.vector);
+    const record = item.type === 'class' ? CLASS_MAP[item.id] : SUBCLASS_MAP[item.id];
+    const fuzzy  = record ? fuzzyTitleScore(queryNorm, record.titulo) : 0;
+    // max-boost: only upgrade when fuzzy helps, never downgrade semantic results
+    const score  = Math.max(cosine, 0.6 * cosine + 0.4 * fuzzy);
+    return { id: item.id, type: item.type, score, cosine, fuzzy };
+  });
   scores.sort((a, b) => b.score - a.score);
 
   return scores.slice(0, topK).map(s => {

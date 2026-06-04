@@ -49,7 +49,7 @@ The interactive viewer (`npm run web`) generates a self-contained `web/index.htm
 
 - **Text search** across all 2004 records (classes + subclasses) with real-time results
 - **Normalized code search** — `85.99-6-03` matches `8599-6/03`
-- **Semantic search** (🧠 Semântica) — natural language search powered by local embeddings and cosine similarity
+- **Semantic search** (🧠 Semântica) — natural language search powered by multilingual embeddings and hybrid scoring (cosine similarity + fuzzy title boost)
 - **Tabs** — Todos · Classes · Subclasses
 - **Pagination** — 100 items per page across all 2004 records
 - **Expandable rows** — click any item to see full hierarchy, related records, embedding text, and tokens
@@ -59,7 +59,7 @@ The viewer is also automatically deployed to **GitHub Pages** on pushes to `main
 
 ### Semantic Search
 
-The 🧠 **Semântica** tab uses pre-computed multilingual embeddings to find CNAE activities by natural language description (e.g., "clínica veterinária" or "desenvolvimento de software"). The model (`paraphrase-multilingual-MiniLM-L12-v2`) runs entirely in the browser via the [Transformers.js](https://huggingface.co/docs/transformers.js) CDN — no server needed.
+The 🧠 **Semântica** tab uses pre-computed multilingual embeddings to find CNAE activities by natural language description (e.g., "clínica veterinária" or "desenvolvimento de software"). Results are ranked by a **hybrid score**: cosine similarity (semantic) + fuzzy title boost — fuzzy only helps, never penalizes. The model (`paraphrase-multilingual-MiniLM-L12-v2`) runs entirely in the browser via the [Transformers.js](https://huggingface.co/docs/transformers.js) CDN — no server needed.
 
 To regenerate embeddings after updating CNAE data:
 
@@ -204,7 +204,7 @@ cnae-checker/
 - **[Known URLs](docs/known-urls.md)** — Complete inventory of all tracked IBGE URLs
 - **[Update Process](docs/update-process.md)** — How to download and update CNAE data
 - **[Data Schema](docs/data-schema.md)** — Complete JSON schema reference for all outputs
-- **[Semantic Search](docs/semantic-search.md)** — Embedding model, cosine similarity, browser inference
+- **[Semantic Search](docs/semantic-search.md)** — Embedding model, hybrid scoring strategy, browser inference
 
 ## License
 

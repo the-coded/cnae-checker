@@ -8,7 +8,7 @@ The web viewer's 🧠 **Semântica** tab lets users search CNAE activities using
 - `"desenvolvimento de software"` → finds `"Desenvolvimento de programas de computador sob encomenda"`
 - `"consulta médica"` → finds relevant healthcare subclasses
 
-This is powered by **multilingual sentence embeddings** and **cosine similarity**, running entirely in the browser — no API key, no server.
+This is powered by **multilingual sentence embeddings** and a **hybrid scoring strategy** (cosine similarity + fuzzy title boost), running entirely in the browser — no API key, no server.
 
 ---
 
@@ -30,8 +30,9 @@ paraphrase-multilingual-MiniLM-L12-v2   paraphrase-multilingual-MiniLM-L12-v2
                      web/index.html
                           │
                     cosine_similarity(query, all_2004_vectors)
+                          + fuzzyTitleScore(query, title)  ← boost-only
                           │
-                    top-20 results ranked by score
+                    top 10 results ranked by hybrid score
 ```
 
 ---
@@ -89,9 +90,11 @@ npm run web
 
 ---
 
-## How Cosine Similarity Works
+## Scoring Strategy
 
-Given a query vector **q** and a stored embedding vector **v**, similarity is:
+### Cosine Similarity
+
+Given a query vector **q** and a stored embedding vector **v**, semantic similarity is:
 
 ```
 cosine_similarity(q, v) = (q · v) / (|q| × |v|)
@@ -99,7 +102,17 @@ cosine_similarity(q, v) = (q · v) / (|q| × |v|)
 
 The score ranges from -1 (opposite) to 1 (identical). In practice, CNAE scores range roughly from 0.3 (unrelated) to 0.9+ (very close match).
 
-The viewer shows the **top 20 results** sorted by score descending.
+### Fuzzy Title Boost (max-boost)
+
+A secondary `fuzzyTitleScore` is computed from word-level overlap between the (accent-normalized) query and each record's title. The final score uses a **max-boost** formula:
+
+```
+score = max(cosine, 0.6 × cosine + 0.4 × fuzzy)
+```
+
+Fuzzy only **helps** — it boosts an exact title match but never penalizes a purely semantic result. For example, `"professor de computador"` still finds `"Treinamento em informática"` with its full cosine score (0.576), while `"treinamento em informatica"` gets boosted to a higher combined score (0.766).
+
+The viewer shows the **top 10 results** sorted by score descending.
 
 ---
 
@@ -119,13 +132,12 @@ After first use, queries are nearly instant (the model stays cached).
 - **First load is slow** (~10-30s depending on connection) — model must download
 - **128-token limit** — very long queries are truncated
 - **Not exact** — semantic search ranks by similarity, not exact keyword presence. Use the regular text search tab for exact code or keyword lookups.
-- **No re-ranking** — results are sorted purely by cosine score; no BM25 hybrid
 
 ---
 
 ## Future Improvements
 
-- Hybrid search: combine cosine similarity (semantic) with BM25 (keyword) for better precision
+- BM25 hybrid — layer true keyword scoring on top of the existing fuzzy title boost for more precise recall
 - Score threshold UI — let users filter results below a minimum score
 - Batch query caching — avoid re-embedding the same query
 - Smaller distilled model for faster first load

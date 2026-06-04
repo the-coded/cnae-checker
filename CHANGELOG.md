@@ -7,7 +7,7 @@ All notable changes to this project are documented here.
 ### Added
 - **CNAE 2.3 Subclasses support** — 1331 subclasses extracted and validated (`output/cnae-subclasses.json`)
 - **`scripts/extract-subclasses.js`** — parser for CNAE 2.3 XLSX format
-- **Semantic search** — 🧠 Semântica tab in the web viewer using multilingual embeddings and cosine similarity
+- **Semantic search** — 🧠 Semântica tab in the web viewer using multilingual embeddings and hybrid scoring (cosine similarity + fuzzy title boost via max-boost strategy)
 - **`scripts/build-embeddings.js`** — pre-computes 384-dimensional vectors for all 2004 records using `paraphrase-multilingual-MiniLM-L12-v2` via `@xenova/transformers`
 - **`output/embeddings.json`** — pre-computed embeddings committed to the repo (~5.6MB, 2004 vectors)
 - **Pagination** — web viewer now shows 100 items per page (was a fixed cap of 200)
@@ -21,6 +21,7 @@ All notable changes to this project are documented here.
 - **README badges** — Demo, License, Node.js, Deploy, CNAE data counts
 
 ### Changed
+- **Semantic search scoring** — replaced pure cosine similarity with a max-boost hybrid: `score = max(cosine, 0.6×cosine + 0.4×fuzzy)`. Fuzzy title matching only upgrades scores; it never penalizes semantic-only results.
 - Web viewer now covers **all 2004 records** (classes + subclasses) instead of classes only
 - `output/cnae-classes.json` replaces the old `cnae.json` (same schema, new path)
 - `scripts/check.js` replaces `scripts/check-extraction.js` with expanded validation
