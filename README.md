@@ -9,8 +9,8 @@
 [![Node.js](https://img.shields.io/badge/Node.js-20+-339933?style=flat-square&logo=node.js&logoColor=white)]()
 [![Deploy](https://img.shields.io/github/actions/workflow/status/the-coded/cnae-checker/deploy-pages.yml?style=flat-square&label=deploy)](https://github.com/the-coded/cnae-checker/actions/workflows/deploy-pages.yml)
 
-[![CNAE Classes](https://img.shields.io/badge/CNAE_Classes-673-orange?style=flat-square)]()
-[![CNAE Subclasses](https://img.shields.io/badge/CNAE_Subclasses-1331-orange?style=flat-square)]()
+[![CNAE 2.0 Classes](https://img.shields.io/badge/CNAE_2.0_Classes-673-orange?style=flat-square)]()
+[![CNAE 2.3 Subclasses](https://img.shields.io/badge/CNAE_2.3_Subclasses-1331-orange?style=flat-square)]()
 
 </div>
 
