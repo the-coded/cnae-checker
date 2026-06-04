@@ -3,178 +3,124 @@
 ## Overview
 
 ```
-┌─────────────┐     ┌─────────────┐     ┌─────────────┐     ┌──────────┐
-│  Download    │ ──▶ │   Extract   │ ──▶ │   Check     │ ──▶ │  Done!   │
-│  from IBGE   │     │  XLS → JSON │     │  Validate   │     │          │
-└─────────────┘     └─────────────┘     └─────────────┘     └──────────┘
+┌─────────────┐     ┌───────────────┐     ┌─────────────┐     ┌──────────────┐     ┌──────────┐
+│   Scrape     │ ──▶ │   Download    │ ──▶ │   Extract   │ ──▶ │   Validate   │ ──▶ │  Done!   │
+│  (new URLs)  │     │  from IBGE    │     │  XLS → JSON │     │  (counts +   │     │          │
+└─────────────┘     └───────────────┘     └─────────────┘     │   formats)   │     └──────────┘
+                                                                └──────────────┘
 ```
 
-## Manual Update (Current)
+The fastest path: `npm start` runs the entire pipeline end-to-end.
 
-### Step 1: Download the latest file
+---
 
-Download `CNAE20_EstruturaDetalhada.xls` from IBGE:
+## Running the Full Pipeline
 
 ```bash
-curl -o CNAE20_EstruturaDetalhada.xls \
-  "https://cnae.ibge.gov.br/images/concla/downloads/revisao2007/PropCNAE20/CNAE20_EstruturaDetalhada.xls"
+npm install      # First time only
+npm start        # scrape → download → extract (classes + subclasses) → check → build viewer
 ```
 
-### Step 2: Extract to JSON
+To also regenerate embeddings (required after data changes):
 
 ```bash
-npm run extract
+npm start
+npm run build:embeddings
 ```
 
-This reads the XLS file and generates `cnae.json` with 673 structured entries.
+---
 
-### Step 3: Validate
+## Manual Steps (Individual Scripts)
+
+### Step 1: Check for new IBGE URLs
+
+```bash
+npm run scrape
+```
+
+Fetches the IBGE download page and compares all `.xls`/`.xlsx` links against the known URL list. Exits with code 1 if new URLs are found (also used by CI to trigger alerts).
+
+### Step 2: Download the latest files
+
+```bash
+npm run download
+```
+
+Downloads the two primary files from IBGE with hash-based change detection:
+- `data/CNAE20_EstruturaDetalhada.xls` — CNAE 2.0 Classes
+- `data/CNAE_Subclasses_2_3_Estrutura_Detalhada.xlsx` — CNAE 2.3 Subclasses
+
+### Step 3: Extract to JSON
+
+```bash
+npm run extract             # CNAE 2.0 classes → output/cnae-classes.json
+npm run extract:subclasses  # CNAE 2.3 subclasses → output/cnae-subclasses.json
+```
+
+### Step 4: Validate
 
 ```bash
 npm run check
 ```
 
 Expected output:
-```
-=== EXTRACTION CHECK ===
 
+```
+=== CNAE CLASSES CHECK ===
 { secoes: 21, divisoes: 87, grupos: 285, classes: 673, total: 673 }
+Duplicados: 0
+Códigos inválidos: 0
+✅ CLASSES VÁLIDAS
 
-=== DUPLICADOS ===
-Qtd duplicados: 0
-
-=== CÓDIGOS INVÁLIDOS ===
-Qtd inválidos: 0
-
-=== STATUS ===
-✅ EXTRAÇÃO CNAE VÁLIDA
+=== CNAE SUBCLASSES CHECK ===
+{ subclasses: 1331, total: 1331 }
+Duplicados: 0
+Códigos inválidos: 0
+✅ SUBCLASSES VÁLIDAS
 ```
 
-### If validation fails:
-
-1. **Wrong counts** — Check if IBGE updated the file structure (new rows/columns?)
-2. **Duplicates** — Check if extract.js deduplication logic needs updating
-3. **Invalid codes** — Check if code format changed (regex in check-extraction.js)
-4. **Missing data** — Check if column order changed in the XLS file
-
-## Automated Update (Future)
-
-### Using npm scripts
+### Step 5: Rebuild the viewer
 
 ```bash
-# Full update pipeline
-npm run update
-
-# Individual steps
-npm run download    # Download files from IBGE
-npm run extract     # Parse XLS → JSON
-npm run check       # Validate extraction
+npm run web
 ```
 
-### Flow
+Regenerates `web/index.html` with the latest data.
 
-```javascript
-// update.js (future)
-async function update() {
-  // 1. Download latest files
-  await download();
-  
-  // 2. Check if files changed (hash comparison)
-  const changed = await checkHash();
-  if (!changed) {
-    console.log('No changes detected. Skipping.');
-    return;
-  }
-  
-  // 3. Extract data
-  await extract();
-  
-  // 4. Validate
-  const valid = await check();
-  if (!valid) {
-    console.error('Validation failed!');
-    process.exit(1);
-  }
-  
-  console.log('✅ Update complete!');
-}
-```
+### Step 6 (Optional): Regenerate embeddings
 
-### GitHub Actions (Future Automation)
+Only needed if CNAE data changed:
 
-```yaml
-name: Update CNAE Data
-on:
-  schedule:
-    - cron: '0 3 1 * *'  # Monthly, 1st day at 3am UTC
-  workflow_dispatch: {}    # Manual trigger
-jobs:
-  update:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with: { node-version: '20' }
-      - run: npm install
-      - run: npm run update
-      - name: Commit if changed
-        run: |
-          git diff --quiet cnae.json || (
-            git config user.name "github-actions"
-            git config user.email "actions@github.com"
-            git add cnae.json
-            git commit -m "chore: update CNAE data $(date +%Y-%m-%d)"
-            git push
-          )
-```
-
-## Adding a New CNAE Version
-
-When IBGE releases a new version (e.g., CNAE 2.4):
-
-1. **Check `ibge-data-sources.md`** for new URLs
-2. **Download the new file** and inspect its structure (column order, sheet name)
-3. **Update `extract.js`** if column order or format changed
-4. **Update `check-extraction.js`** if expected counts changed
-5. **Update `data-schema.md`** if new fields are needed
-6. **Run the full pipeline:** `npm run update`
-7. **Update docs** with the new version info
-
-## Handling New File Formats
-
-### XLSX (already supported)
-The `xlsx` library handles both `.xls` and `.xlsx`. No changes needed.
-
-### ZIP files
-Some older CNAE files come in `.zip` format. To support:
 ```bash
-npm install adm-zip
-```
-```javascript
-const AdmZip = require('adm-zip');
-const zip = new AdmZip('file.zip');
-zip.extractAllTo('./temp/', true);
-// Then parse the extracted XLS/XLSX
+npm run build:embeddings
+# Writes output/embeddings.json (~5.6MB, 2004 vectors)
+# Then rebuild the viewer to pick up the new embeddings:
+npm run web
 ```
 
-### New formats
-If IBGE starts publishing in CSV, ODS, or other formats:
-1. Check if the `xlsx` library supports it (it supports many formats)
-2. If not, find a suitable parser
-3. Update `extract.js` to detect file format and use appropriate parser
+---
 
-## Troubleshooting
+## If Validation Fails
 
-### "EXTRAÇÃO COM PROBLEMAS"
+### "Wrong counts"
 
 | Issue | Likely Cause | Fix |
 |-------|-------------|-----|
-| Wrong section count (≠21) | New section added | Update expected count in `check-extraction.js` |
-| Wrong division count (≠87) | Structure changed | Re-analyze XLS structure |
-| Wrong group count (≠285) | Structure changed | Re-analyze XLS structure |
+| Wrong section count (≠21) | New section added | Update expected count in `scripts/check.js` |
+| Wrong division count (≠87) | Structure changed | Re-analyze XLS, update `check.js` |
+| Wrong group count (≠285) | Structure changed | Re-analyze XLS, update `check.js` |
 | Wrong class count (≠673) | New classes added | Update expected count, verify data |
-| Duplicates found | Extraction logic issue | Check row filtering in `extract.js` |
-| Invalid codes | Format changed | Update regex in `check-extraction.js` |
+| Wrong subclass count (≠1331) | New subclasses added | Update expected count, verify data |
+
+### "Duplicates found"
+
+Check row filtering logic in `scripts/extract.js` or `scripts/extract-subclasses.js`.
+
+### "Invalid codes"
+
+Check if the code format regex changed. Update in `scripts/check.js`:
+- Classes: `/^\d{2}\.\d{2}-\d$/`
+- Subclasses: `/^\d{4}-\d\/\d{2}$/`
 
 ### Download failures
 
@@ -182,6 +128,73 @@ If IBGE starts publishing in CSV, ODS, or other formats:
 # Check if URL is still valid
 curl -I "https://cnae.ibge.gov.br/images/concla/downloads/revisao2007/PropCNAE20/CNAE20_EstruturaDetalhada.xls"
 
-# If 404, check the download page for updated URLs
+# If 404, look for updated URLs on the download page
 curl -s "https://cnae.ibge.gov.br/classificacoes/download-concla.html" | grep -i "cnae.*\.xls"
 ```
+
+---
+
+## Adding a New CNAE Version
+
+When IBGE releases a new version (e.g., CNAE 2.4):
+
+1. **Check `docs/ibge-data-sources.md`** for new URLs
+2. **Download the new file** and inspect its XLS structure (sheet name, column order)
+3. **Update `scripts/download.js`** — add the new URL to the `FILES` array
+4. **Update `scripts/scrape-urls.js`** — add the new URL to `KNOWN_URLS`
+5. **Create a new extractor** (e.g., `scripts/extract-subclasses-24.js`) or update the existing one if format is identical
+6. **Update `scripts/check.js`** — add validation rules for the new file
+7. **Update `docs/ibge-data-sources.md`** and `docs/known-urls.md`
+8. **Run the full pipeline:** `npm start`
+
+---
+
+## Handling New File Formats
+
+### XLSX (already supported)
+
+The `xlsx` library handles both `.xls` and `.xlsx` transparently.
+
+### ZIP files
+
+Some older CNAE files are in `.zip` format. To support:
+
+```bash
+npm install adm-zip
+```
+
+```javascript
+const AdmZip = require('adm-zip');
+const zip = new AdmZip('file.zip');
+zip.extractAllTo('./temp/', true);
+// Then parse the extracted XLS/XLSX as usual
+```
+
+### New formats
+
+If IBGE publishes in CSV, ODS, or other formats:
+1. Check if the `xlsx` library supports it (handles many formats)
+2. If not, find a suitable parser
+3. Update the appropriate `extract*.js` script to detect and handle the format
+
+---
+
+## Automated Monitoring (CI/CD)
+
+The `cnae-monitor.yml` workflow (in `.github/workflows/`) can be triggered manually or on a schedule:
+
+```yaml
+# Enable monthly monitoring — uncomment in cnae-monitor.yml:
+on:
+  schedule:
+    - cron: '0 3 1 * *'  # Monthly, 1st day at 3am UTC
+  workflow_dispatch: {}
+```
+
+The workflow:
+1. Runs `npm run scrape` — exits 1 if new IBGE URLs are found
+2. Runs `npm run download` — skips if files unchanged (hash match)
+3. Runs extract + check — fails if validation errors
+4. Optionally sends a webhook alert (commented out, ready to enable)
+
+**Recommendation:** A monthly check is sufficient — CNAE changes very rarely (major revisions roughly every 5-7 years).
